@@ -75,8 +75,8 @@ funcDec = TestCase $ assertEqual "func with 2 clauses" (funD fun [cl1, cl2]) (do
 
               pts1 = [ap, bp, cp]
               pts2 = [conP con [conP con [ap, cp], bp, cp], litP (TH.IntegerL 100)]
-              cl1 = buildClause pts1 exp1
-              cl2 = buildClause pts2 exp2
+              cl1 = clause pts1 exp1 []
+              cl2 = clause pts2 exp2 []
 
 sigDec :: Test
 sigDec = TestCase $ assertEqual "func signature" (sigD fun type_) (docD "fun :: (->) ((->) a b) c")
@@ -88,8 +88,37 @@ sigDec = TestCase $ assertEqual "func signature" (sigD fun type_) (docD "fun :: 
               fun = mkName "fun"
               type_ = (arrow `appT` ((arrow `appT` a) `appT` b)) `appT` c
 
+
+funWhereSection :: Test 
+funWhereSection = TestCase $ assertEqual "func with where" (funD fun [cl]) (docD $ "fun a b c = c (a b)\n"                    ++
+                                                                                   "        where\n"                          ++
+                                                                                   "            nestedF1 :: t1\n"             ++
+                                                                                   "            nestedF1 = mempty\n"          ++
+                                                                                   "                         where\n"         ++
+                                                                                   "                             mempty = 100"  )
+            where a = varE $ mkName "a"
+                  b = varE $ mkName "b"
+                  c = varE $ mkName "c"
+
+                  ap = varP $ mkName "a"
+                  bp = varP $ mkName "b"
+                  cp = varP $ mkName "c"
+
+                  fun = mkName "fun"
+
+                  exp = appE c (appE a b)
+                  pts = [ap, bp, cp]
+                  memptyD = funD (mkName "mempty") [clause [] (intE 100) []]
+                  nestedD = [sigD (mkName "nestedF1") (conT $ mkName "t1"), funD (mkName "nestedF1") [clause [] (varE $ mkName "mempty") [memptyD]]]
+                  cl = clause pts exp nestedD
+
 tests :: Test
-tests = TestList [exps, patterns, types, funcDec, sigDec]
+tests = TestList [exps, patterns, types, funcDec, sigDec, funWhereSection]
 
 main :: IO Counts
 main = runTestTT tests
+
+
+nested :: [DocDec] -> PP.Doc
+nested decs = PP.text "where" PP.$+$
+              foldr (PP.$+$) PP.empty [PP.nest 4 dec | DocDec dec <- decs]
